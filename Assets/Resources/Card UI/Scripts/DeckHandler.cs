@@ -17,6 +17,8 @@ namespace CardSystem
         private UnityAction _onDraw;
         
         private Transform _drawTarget;
+
+        private bool _cancelDraw = false;
         
         void Start()
         {
@@ -60,23 +62,72 @@ namespace CardSystem
             RenderCards();
         }
 
+        public void CancelDraw()
+        {
+            _cancelDraw = true;
+        }
+
         public void DrawCard()
         {
             if(!AllowDraw || Cards.Count == 0 || CardEnvironment.instance.IsHoldingCard) { return; }
 
             Card c = Cards.Last();
-            Cards.Remove(c);
-            c.SetCardObjectParent(CardEnvironment.instance.CardCanvas.transform);
-            c.ResetGraphicsObject();
-            c.MoveCardObject(_drawTarget.position);
-            _guiButton.targetGraphic = null;
-            CardEnvironment.instance.AddCardToSystem(c);
-            c.UnlockCard();
-
+            _cancelDraw = false;
+            CardEnvironment.instance.CreateGhostCard(c);
+            StartCoroutine(CardMoveLerp(c, c.CardPosition));
             Debug.Log("Drawing card from deck");
-            //CardEnvironment.instance.ProcessCardClick(c);
+        }
 
+        IEnumerator CardMoveLerp(Card card, Vector2 startPosition)
+        {
+            _drawTarget = null;
+            _guiButton.targetGraphic = null;
+            //yield return new WaitForSeconds(0.25f); // wait a bit so target can't be set instantly
+            while(_drawTarget == null)
+            {
+                // await target from card environment
+                CardEnvironment.instance.AllowTargetClick();
+
+                if(_cancelDraw)
+                {
+                    _cancelDraw = false;
+                    _guiButton.targetGraphic = card.CardGraphic;
+                    Debug.Log("Cancelled draw");
+                    RenderCards();
+                    yield break;
+                }
+
+                yield return new WaitForEndOfFrame();
+            }
+
+            Cards.Remove(card);
+            card.ResetGraphicsObject();
+            card.SetCardObjectParent(CardEnvironment.instance.CardCanvas.transform);
+            card.MoveCardObject(transform.localPosition);
+
+            Vector2 targetPosition = _drawTarget.localPosition;
+            float delta = 0;
+            float distance = Vector2.Distance(startPosition, targetPosition);
+            
+
+            while (distance > 0.2f)
+            {
+                Vector2 movementIncrement = Vector2.Lerp(card.CardPosition, targetPosition, delta * Time.deltaTime);
+                card.MoveCardObject(movementIncrement);
+                distance = Vector2.Distance(card.CardPosition, targetPosition);
+                delta += (Time.deltaTime * 45);
+                yield return new WaitForEndOfFrame();
+            }
+
+            card.MoveCardObject(targetPosition);
+            
+            CardEnvironment.instance.AddCardToSystem(card);
+            card.UnlockCard();
+
+            Destroy(_drawTarget.gameObject);
             RenderCards();
+
+            yield return null;
         }
 
         public void SetCardDrawTarget(Transform target)
@@ -94,6 +145,7 @@ namespace CardSystem
         {
             Cards = new();
             Cards = cards;
+            ShuffleDeck();
             RenderCards();
         }
 
@@ -103,6 +155,8 @@ namespace CardSystem
             var shuffledDeck = Cards.OrderBy (x => rand.Next()).ToList();
 
             Cards = shuffledDeck;
+
+            RenderCards();
         }
 
         public void RenderCards()
@@ -125,8 +179,6 @@ namespace CardSystem
                 Cards[i].LockCard();
             }
 
-            //Cards.Last().UnlockCard();
-            
             _guiButton.targetGraphic = Cards.Last().CardGraphic;
             
         }

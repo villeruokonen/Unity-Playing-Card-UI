@@ -12,6 +12,9 @@ namespace CardSystem
         public string CardName { get; private set; } = "NewCard";
         public Graphic CardGraphic { get; private set; }
         public bool Locked { get; private set; } = false;
+        public Vector2 CardPosition { get { return _cardObjectContainer.transform.localPosition; } private set {} }
+        public GameObject CardObject { get { return _cardObjectContainer; } private set {} }
+        public GameObject CardGraphicObject { get { return _cardGraphicsContainer; } private set {} }
 
         private Button _cardButton;
 
@@ -40,7 +43,7 @@ namespace CardSystem
 
         public void BeginDrag()
         {
-            //if(Locked) { Debug.Log("Tried to begin drag on locked card"); return; }
+            if(Locked) { return; }
             IsBeingDragged = true;
         }
 
@@ -67,7 +70,12 @@ namespace CardSystem
             _cardButton.interactable = true;
         }
 
-        public void MoveCardObject(Vector3 newPosition)
+        public void MakeGhost()
+        {
+            CardGraphic.color = new(0.5f, 0.5f, 0.5f, 0.5f);
+        }
+
+        public void MoveCardObject(Vector2 newPosition)
         {
             _cardObjectContainer.transform.localPosition = newPosition;
         }
@@ -80,7 +88,7 @@ namespace CardSystem
 
         }
 
-        public void MoveCardGraphicsObject(Vector3 newPosition)
+        public void MoveCardGraphicsObject(Vector2 newPosition)
         {
             _cardGraphicsContainer.transform.position = newPosition;
         }

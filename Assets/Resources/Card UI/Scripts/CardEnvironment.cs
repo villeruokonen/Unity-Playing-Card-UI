@@ -8,23 +8,22 @@ namespace CardSystem
     public class CardEnvironment : MonoBehaviour
     {
         public static CardEnvironment instance;
-        int _waitFrames = 0;
-        const int _maxWaitFrames = 5;
         public List<Card> Cards { get; private set; }
-        private Card _curCard;
+        
         public Canvas CardCanvas;
         public const int OffScreenPos = -5000;
         public DeckHandler deck;
         public RectTransform CanvasRect { get; private set; }
         public bool IsHoldingCard { get; private set; }
 
-        private List<Transform> _cardTargets;
+        private bool _canSetTarget;
+        private GameObject _ghostCard;
+        int _waitFrames = 0;
+        const int _maxWaitFrames = 5;
 
         public void ProcessCardClick(Card card)
         {
-            //if(card.Locked) { return; }
-            //Debug.Log("Card is not locked");
-
+            
             if(!card.IsBeingDragged)
             {
                 card.RefreshCardObjectParent(CardCanvas.transform);
@@ -52,22 +51,21 @@ namespace CardSystem
 
         void Start()
         {
+            Initialize();
+        }
+
+        void Initialize()
+        {
             Cards = new List<Card>();
             CardCanvas = GetComponentInChildren<Canvas>();
             CanvasRect = CardCanvas.GetComponent<RectTransform>();
-            _cardTargets = new();
 
             for(int i = 0; i < 10; i++)
             {
-                CreateCardInSystem(i, "TestCard");
+                CreateCardInSystem(i + 1, "Ville\nRuokonen");
             }
 
-            _cardTargets.Add(new GameObject("Card Target").GetComponent<Transform>());
-            _cardTargets[0].localPosition = new Vector2(-400, 0);
-            foreach(Transform t in _cardTargets) { t.SetParent(transform, true); }
-            SendCardsToDeck(deck, _cardTargets[0]);
-            //deck.ShuffleDeck();
-            
+            SendCardsToDeck(deck);
         }
 
         void CreateCardInSystem(int cardValue, string cardName)
@@ -81,11 +79,58 @@ namespace CardSystem
             Cards.Add(card);
         }
 
-        void SendCardsToDeck(DeckHandler deck, Transform drawTarget)
+        public void DestroyGhostCard()
+        {
+            Destroy(_ghostCard);
+        }
+
+        void SendCardsToDeck(DeckHandler deck)
         {
             deck.SetCards(Cards);
-            deck.SetCardDrawTarget(drawTarget);
+
             Cards = new();
+        }
+
+        public void AllowTargetClick()
+        {
+            _canSetTarget = true;
+        }
+
+        public void CreateGhostCard(Card source)
+        {
+            if(_ghostCard != null) { return; }
+
+            _ghostCard = Instantiate(source.CardGraphicObject, CardCanvas.transform);
+            Graphic[] graphics = _ghostCard.GetComponentsInChildren<Graphic>();
+            for(int i = 0; i < graphics.Length; i++)
+            {
+                graphics[i].color = new(0.8f, 0.8f, 0.8f, 0.5f);
+                graphics[i].raycastTarget = false;
+            }
+        }
+
+        void AllowCardDrawTargetToClick()
+        {
+            if(!_canSetTarget) { return; }
+            
+            Vector2 pos = Input.mousePosition;
+            if(_ghostCard != null) { _ghostCard.transform.position = pos; }
+            
+            if(Input.GetMouseButtonDown(0))
+            {
+                GameObject target = new ("Click Target");
+                target.transform.SetParent(CardCanvas.transform, false);
+                target.transform.position = pos;
+                deck.SetCardDrawTarget(target.transform);
+                _canSetTarget = false;
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            {
+                deck.CancelDraw();
+                _canSetTarget = false;
+            }
         }
 
         void MoveCardToPosition(Card card, Vector3 position)
@@ -104,6 +149,10 @@ namespace CardSystem
             {
                 UpdateCard(card);
             }
+
+            AllowCardDrawTargetToClick();
+
+            if(!_canSetTarget && _ghostCard != null) { DestroyGhostCard(); }
         }
 
         void UpdateCard(Card card)
